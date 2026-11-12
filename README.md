@@ -5,81 +5,129 @@
 
 # FTEC5660 Reproducibility Study
 
-## Retrieval Depth in Mem0: Balancing Answer Accuracy and Token Efficiency
+## Retrieval-Depth Sensitivity Analysis in Mem0
 
-**Project focus:** Mem0 Agent Memory Retrieval
-**Experiment:** LOCOMO benchmark, Mem0 OSS
-**Research question:** How does retrieval depth (Top-K) affect answer accuracy and LLM token consumption?
+**Project focus:** Mem0 Agent Memory Retrieval  
+**Experiment:** LOCOMO benchmark using Mem0 OSS  
+**Research question:** How does retrieval depth (Top-K) affect answer quality and API token consumption?
 
 ### 1. Project Overview
 
-This study investigates the trade-off between answer accuracy and token efficiency in Mem0's memory retrieval pipeline.
+This project studies Mem0, an agentic memory system that extracts, stores, and retrieves information from conversational histories to support context-aware responses.
 
-We reproduce the execution and evaluation workflow of the open-source Mem0 LOCOMO benchmark and extend the benchmark with per-configuration LLM token usage tracking.
+The objective is to understand and operate the existing Mem0 system by reproducing part of its official LOCOMO benchmark workflow and examining the impact of a controlled parameter-level modification.
 
-Rather than assuming that retrieving more memories always improves performance, we examine whether increasing retrieval depth leads to better answers and whether the additional token consumption is justified.
+Rather than changing Mem0's core memory mechanism, this study focuses on retrieval depth and investigates whether retrieving more memories improves answer quality and whether the additional API token consumption is justified.
 
-### 2. Reproduction Scope
+### 2. Mem0 Memory Workflow
 
-The experiment uses the first conversation (Conversation 0) from the LOCOMO dataset.
+The experiment follows the existing Mem0 memory and evaluation pipeline:
 
-- Dataset: LOCOMO
-- Conversations: 1 (Conversation 0)
-- Dialogue sessions: 19
-- Ingested memory chunks: 419
-- Evaluation questions: 152
-- Backend: Mem0 OSS
-- Answerer and Judge: DeepSeek Flash
+1. **Memory Ingestion:** Conversational information is processed, and relevant facts are extracted from the dialogue.
+2. **Embedding and Storage:** Extracted information is converted into vector embeddings and stored in Qdrant.
+3. **Memory Retrieval:** For each evaluation question, Mem0 retrieves relevant memories based on the query.
+4. **Answer Generation:** The retrieved memories are provided to the Answerer, which generates an answer.
+5. **Answer Evaluation:** The Judge compares the generated answer with the reference answer and determines whether it is CORRECT or WRONG.
 
-This is a scoped reproduction of the open-source benchmark workflow, not a full reproduction of all experiments reported in the original Mem0 paper.
+This workflow allows the benchmark to evaluate how retrieved conversational memories support question answering.
 
-### 3. Code Modification
+### 3. Reproduction Scope and Experimental Design
 
-We extended the original benchmark implementation in two files:
+This project reproduces a scoped part of the official Mem0 LOCOMO benchmark using Conversation 0 (Caroline and Melanie).
 
-| File | Modification |
+The experiment uses the official benchmark implementation with Mem0 OSS, Qdrant, and DeepSeek Flash for both answer generation and LLM-based judging.
+
+The reproduction follows the original benchmark workflow while keeping the evaluation dataset and main configuration consistent across retrieval-depth conditions.
+
+**Retrieval procedure:**
+
+For each evaluation question, the system performs one initial retrieval of up to Top-200 memories. The resulting ranked list is then truncated to different retrieval cutoffs before being passed to the Answerer.
+
+The experiment evaluates the following settings:
+
+| Configuration | Top-K |
 |---|---|
-| `benchmarks/common/llm_client.py` | Added API token usage tracking for LLM calls, including prompt, completion, and total tokens. |
-| `benchmarks/locomo/run.py` | Captured Answerer and Judge token usage, combined the measurements, and aggregated token statistics for each Top-K configuration. |
+| Original runner defaults | 10, 20, 50, 200 |
+| Additional settings | 5, 100 |
 
-These changes make it possible to evaluate retrieval configurations from both answer-quality and token-efficiency perspectives.
+All settings use the same initial Top-200 retrieval results for each question. Therefore, the experiment examines the effect of changing the retrieval cutoff under a fixed initial ranking, rather than comparing independent retrieval calls.
 
-### 4. Experimental Results
+### 4. Modification Design
 
-We evaluated six retrieval cutoffs while keeping the main experiment configuration fixed.
+The main modification is a parameter-level extension of retrieval depth.
 
-| Retrieval Depth | Correct Answers | Answer Accuracy | Combined Avg. Tokens |
-|---:|---:|---:|---:|
-| Top-5 | 92/152 | 60.5% | 3,312.11 |
-| Top-10 | 102/152 | 67.1% | 3,630.91 |
-| Top-20 | 102/152 | 67.1% | 4,192.24 |
-| Top-50 | 107/152 | **70.4%** | 5,788.67 |
-| Top-100 | 102/152 | 67.1% | 8,213.66 |
-| Top-200 | 102/152 | 67.1% | 13,121.38 |
+The original benchmark runner supports four default Top-K cutoffs. This project adds Top-K = 5 and Top-K = 100 to examine the effects of smaller and intermediate retrieval depths.
 
-**Key observations:**
+The dataset, initial retrieval results, Answerer, Judge, and evaluation workflow are kept consistent across the different settings. Only the number of retrieved memories passed to the Answerer is varied.
 
-- Top-50 achieved the highest observed answer accuracy in this experiment.
-- Top-10 and Top-20 achieved the same accuracy, while Top-10 required fewer average tokens.
-- Top-200 consumed approximately 126.7% more combined average tokens than Top-50, while its accuracy was 3.3 percentage points lower.
+To measure the impact of this modification, API token usage tracking is also added. This tracking is an evaluation instrument, not a separate modification to Mem0's core memory mechanism or the Answerer's generation procedure.
 
-The combined token measurement includes the Answerer and Judge API usage. It does not include Mem0 ingestion or memory extraction tokens.
+**Implementation changes:**
 
-### 5. Practical Significance
+| File | Purpose |
+|---|---|
+| `benchmarks/locomo/run.py` | Supports the additional retrieval cutoffs, records Answerer and Judge token usage, and aggregates token statistics for each Top-K setting. |
+| `benchmarks/common/llm_client.py` | Collects prompt and completion token usage from LLM API calls. |
 
-The modification provides additional information for selecting retrieval depth in memory-augmented LLM applications.
+### 5. Evaluation Metrics
 
-Developers can use the measurements to understand the relationship between retrieval depth, answer quality, and LLM token consumption, rather than relying only on retrieval-count defaults.
+The experiment evaluates retrieval-depth settings from two perspectives: answer quality and API token consumption.
 
-The results suggest that increasing the number of retrieved memories does not necessarily improve answer accuracy and may introduce substantial additional token consumption.
+**5.1 J Score**
 
-### 6. Limitations
+Answer quality is evaluated using the benchmark's LLM-as-a-Judge approach. Each generated answer is classified as either CORRECT or WRONG.
 
-- The experiment covers only one conversation from LOCOMO.
-- Results are based on one final run and should not be generalized to all conversations or applications.
-- Answer accuracy is evaluated by an LLM Judge; it is not a direct measurement of retrieval Recall@K.
-- Token statistics cover Answerer and Judge calls, rather than the complete end-to-end system cost.
-- The experiment is not a full reproduction of the original Mem0 paper.
+\[
+J\ Score=\frac{N_{\mathrm{correct}}}
+{N_{\mathrm{correct}}+N_{\mathrm{wrong}}}\times100\%
+\]
+
+**5.2 API Token Usage**
+
+Token usage is recorded separately for the Answerer and Judge. Both prompt tokens and completion tokens are included.
+
+For each Top-K setting, the average token usage is calculated across all evaluation questions.
+
+Average Answerer Tokens:
+
+\[
+\frac{1}{N}\sum_{i=1}^{N}(P_i^A+C_i^A)
+\]
+
+Average Judge Tokens:
+
+\[
+\frac{1}{N}\sum_{i=1}^{N}(P_i^J+C_i^J)
+\]
+
+Average Combined Tokens:
+
+\[
+\frac{1}{N}\sum_{i=1}^{N}
+(P_i^A+C_i^A+P_i^J+C_i^J)
+\]
+
+where:
+
+- \(P_i^A\) is the number of prompt tokens used by the Answerer for question \(i\).
+- \(C_i^A\) is the number of completion tokens generated by the Answerer for question \(i\).
+- \(P_i^J\) is the number of prompt tokens used by the Judge for question \(i\).
+- \(C_i^J\) is the number of completion tokens generated by the Judge for question \(i\).
+- \(N\) is the total number of evaluation questions.
+
+Token usage covers Answerer and Judge API calls. It excludes memory ingestion and extraction, and is different from the retrieved-memory token consumption reported in the original Mem0 paper.
+
+### 6. Experimental Scope and Limitations
+
+This is a scoped reproduction rather than a complete replication of the original Mem0 paper.
+
+- The evaluation is restricted to one LOCOMO conversation.
+- DeepSeek Flash is used for answer generation and judging instead of the models used in the original paper.
+- The local Judge prompt includes additional evaluation rules, which may affect the judging results.
+- The experiment uses a shared initial Top-200 retrieval ranking across different Top-K settings.
+- API token tracking measures Answerer and Judge consumption, not the complete end-to-end system cost.
+
+These differences should be considered when interpreting the results or comparing them with the original paper.
 
 <!-- FTEC5660 STUDY END -->
 
