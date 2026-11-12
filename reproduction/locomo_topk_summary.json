@@ -1,0 +1,128 @@
+{
+  "project": "FTEC5660 Reproducibility Study",
+  "experiment": "Mem0 LOCOMO Retrieval Depth Ablation",
+  "run_id": "dd516fcf",
+  "source_file": "locomo_results_20261112_135907.json",
+  "scope": {
+    "conversations": 1,
+    "questions_per_cutoff": 152,
+    "retrieval_depths": [
+      5,
+      10,
+      20,
+      50,
+      100,
+      200
+    ]
+  },
+  "results": [
+    {
+      "retrieval_depth": "top_5",
+      "correct": 92,
+      "total_questions": 152,
+      "accuracy_percent": 60.53,
+      "category_accuracy_percent": {
+        "multi-hop": 53.12,
+        "open-domain": 92.31,
+        "single-hop": 87.14,
+        "temporal": 5.41
+      },
+      "average_tokens_per_question": {
+        "answerer": 2394.01,
+        "judge": 918.1,
+        "combined": 3312.11
+      },
+      "combined_total_tokens": 503441
+    },
+    {
+      "retrieval_depth": "top_10",
+      "correct": 102,
+      "total_questions": 152,
+      "accuracy_percent": 67.11,
+      "category_accuracy_percent": {
+        "multi-hop": 75.0,
+        "open-domain": 100.0,
+        "single-hop": 88.57,
+        "temporal": 8.11
+      },
+      "average_tokens_per_question": {
+        "answerer": 2727.02,
+        "judge": 903.89,
+        "combined": 3630.91
+      },
+      "combined_total_tokens": 551898
+    },
+    {
+      "retrieval_depth": "top_20",
+      "correct": 102,
+      "total_questions": 152,
+      "accuracy_percent": 67.11,
+      "category_accuracy_percent": {
+        "multi-hop": 75.0,
+        "open-domain": 100.0,
+        "single-hop": 91.43,
+        "temporal": 2.7
+      },
+      "average_tokens_per_question": {
+        "answerer": 3295.32,
+        "judge": 896.92,
+        "combined": 4192.24
+      },
+      "combined_total_tokens": 637220
+    },
+    {
+      "retrieval_depth": "top_50",
+      "correct": 107,
+      "total_questions": 152,
+      "accuracy_percent": 70.39,
+      "category_accuracy_percent": {
+        "multi-hop": 78.12,
+        "open-domain": 92.31,
+        "single-hop": 97.14,
+        "temporal": 5.41
+      },
+      "average_tokens_per_question": {
+        "answerer": 4884.05,
+        "judge": 904.62,
+        "combined": 5788.67
+      },
+      "combined_total_tokens": 879878
+    },
+    {
+      "retrieval_depth": "top_100",
+      "correct": 102,
+      "total_questions": 152,
+      "accuracy_percent": 67.11,
+      "category_accuracy_percent": {
+        "multi-hop": 62.5,
+        "open-domain": 100.0,
+        "single-hop": 95.71,
+        "temporal": 5.41
+      },
+      "average_tokens_per_question": {
+        "answerer": 7327.64,
+        "judge": 886.03,
+        "combined": 8213.66
+      },
+      "combined_total_tokens": 1248477
+    },
+    {
+      "retrieval_depth": "top_200",
+      "correct": 102,
+      "total_questions": 152,
+      "accuracy_percent": 67.11,
+      "category_accuracy_percent": {
+        "multi-hop": 59.38,
+        "open-domain": 100.0,
+        "single-hop": 97.14,
+        "temporal": 5.41
+      },
+      "average_tokens_per_question": {
+        "answerer": 12227.22,
+        "judge": 894.16,
+        "combined": 13121.38
+      },
+      "combined_total_tokens": 1994449
+    }
+  ]
+}

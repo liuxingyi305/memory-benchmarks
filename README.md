@@ -1,5 +1,91 @@
 # Memory Benchmarks
 
+
+<!-- FTEC5660 STUDY START -->
+
+# FTEC5660 Reproducibility Study
+
+## Retrieval Depth in Mem0: Balancing Answer Accuracy and Token Efficiency
+
+**Project focus:** Mem0 Agent Memory Retrieval
+**Experiment:** LOCOMO benchmark, Mem0 OSS
+**Research question:** How does retrieval depth (Top-K) affect answer accuracy and LLM token consumption?
+
+### 1. Project Overview
+
+This study investigates the trade-off between answer accuracy and token efficiency in Mem0's memory retrieval pipeline.
+
+We reproduce the execution and evaluation workflow of the open-source Mem0 LOCOMO benchmark and extend the benchmark with per-configuration LLM token usage tracking.
+
+Rather than assuming that retrieving more memories always improves performance, we examine whether increasing retrieval depth leads to better answers and whether the additional token consumption is justified.
+
+### 2. Reproduction Scope
+
+The experiment uses the first conversation (Conversation 0) from the LOCOMO dataset.
+
+- Dataset: LOCOMO
+- Conversations: 1 (Conversation 0)
+- Dialogue sessions: 19
+- Ingested memory chunks: 419
+- Evaluation questions: 152
+- Backend: Mem0 OSS
+- Answerer and Judge: DeepSeek Flash
+
+This is a scoped reproduction of the open-source benchmark workflow, not a full reproduction of all experiments reported in the original Mem0 paper.
+
+### 3. Code Modification
+
+We extended the original benchmark implementation in two files:
+
+| File | Modification |
+|---|---|
+| `benchmarks/common/llm_client.py` | Added API token usage tracking for LLM calls, including prompt, completion, and total tokens. |
+| `benchmarks/locomo/run.py` | Captured Answerer and Judge token usage, combined the measurements, and aggregated token statistics for each Top-K configuration. |
+
+These changes make it possible to evaluate retrieval configurations from both answer-quality and token-efficiency perspectives.
+
+### 4. Experimental Results
+
+We evaluated six retrieval cutoffs while keeping the main experiment configuration fixed.
+
+| Retrieval Depth | Correct Answers | Answer Accuracy | Combined Avg. Tokens |
+|---:|---:|---:|---:|
+| Top-5 | 92/152 | 60.5% | 3,312.11 |
+| Top-10 | 102/152 | 67.1% | 3,630.91 |
+| Top-20 | 102/152 | 67.1% | 4,192.24 |
+| Top-50 | 107/152 | **70.4%** | 5,788.67 |
+| Top-100 | 102/152 | 67.1% | 8,213.66 |
+| Top-200 | 102/152 | 67.1% | 13,121.38 |
+
+**Key observations:**
+
+- Top-50 achieved the highest observed answer accuracy in this experiment.
+- Top-10 and Top-20 achieved the same accuracy, while Top-10 required fewer average tokens.
+- Top-200 consumed approximately 126.7% more combined average tokens than Top-50, while its accuracy was 3.3 percentage points lower.
+
+The combined token measurement includes the Answerer and Judge API usage. It does not include Mem0 ingestion or memory extraction tokens.
+
+### 5. Practical Significance
+
+The modification provides additional information for selecting retrieval depth in memory-augmented LLM applications.
+
+Developers can use the measurements to understand the relationship between retrieval depth, answer quality, and LLM token consumption, rather than relying only on retrieval-count defaults.
+
+The results suggest that increasing the number of retrieved memories does not necessarily improve answer accuracy and may introduce substantial additional token consumption.
+
+### 6. Limitations
+
+- The experiment covers only one conversation from LOCOMO.
+- Results are based on one final run and should not be generalized to all conversations or applications.
+- Answer accuracy is evaluated by an LLM Judge; it is not a direct measurement of retrieval Recall@K.
+- Token statistics cover Answerer and Judge calls, rather than the complete end-to-end system cost.
+- The experiment is not a full reproduction of the original Mem0 paper.
+
+<!-- FTEC5660 STUDY END -->
+
+---
+
+
 Open-source evaluation suite to run benchmarks on memory-augmented LLM systems. Currently supports the [Mem0](https://github.com/mem0ai/mem0) Cloud and OSS versions to measure memory recall, extraction quality, and retrieval accuracy.
 
 ## Benchmarks

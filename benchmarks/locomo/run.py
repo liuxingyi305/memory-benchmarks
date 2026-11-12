@@ -464,6 +464,7 @@ async def process_question(
         # Generate answer
         gen_prompt = get_answer_generation_prompt(question, sliced, reference_date=reference_date_human, user_profile=user_profile)
         generated_answer = await answerer.generate(system="", user=gen_prompt)
+        answerer_usage = answerer.get_usage()
         if "ANSWER:" in generated_answer:
             generated_answer = generated_answer.rsplit("ANSWER:", 1)[-1].strip()
 
@@ -477,6 +478,7 @@ async def process_question(
             system=JUDGE_SYSTEM_PROMPT,
             user=judge_prompt,
         )
+        judge_usage = judge_llm.get_usage()
         if isinstance(raw, dict):
             label_val = raw.get("label", "").upper()
             correct = label_val == "CORRECT"
@@ -492,6 +494,7 @@ async def process_question(
             "generated_answer": generated_answer,
             "memories_evaluated": len(sliced),
             "reason": raw.get("reasoning", "") if isinstance(raw, dict) else "",
+            "token_usage": combine_token_usage(answerer_usage, judge_usage),
         }
 
     result["cutoff_results"] = cutoff_results
@@ -534,6 +537,7 @@ async def apply_locomo_judge_to_saved_result(
             question, sliced, reference_date=reference_date_human, user_profile=user_profile,
         )
         generated_answer = await answerer.generate(system="", user=gen_prompt)
+        answerer_usage = answerer.get_usage()
         if "ANSWER:" in generated_answer:
             generated_answer = generated_answer.rsplit("ANSWER:", 1)[-1].strip()
 
@@ -548,6 +552,7 @@ async def apply_locomo_judge_to_saved_result(
             system=JUDGE_SYSTEM_PROMPT,
             user=judge_prompt,
         )
+        judge_usage = judge_llm.get_usage()
         if isinstance(raw, dict):
             label_val = raw.get("label", "").upper()
             correct = label_val == "CORRECT"
@@ -563,9 +568,28 @@ async def apply_locomo_judge_to_saved_result(
             "generated_answer": generated_answer,
             "memories_evaluated": len(sliced),
             "reason": raw.get("reasoning", "") if isinstance(raw, dict) else "",
+            "token_usage": combine_token_usage(answerer_usage, judge_usage),
         }
 
     result["cutoff_results"] = cutoff_results
+
+
+def combine_token_usage(answerer_usage: dict, judge_usage: dict) -> dict:
+    """Combine Answerer and Judge token usage for one Top-K evaluation."""
+    keys = ("prompt_tokens", "completion_tokens", "total_tokens")
+
+    answerer = {key: int(answerer_usage.get(key, 0) or 0) for key in keys}
+    judge = {key: int(judge_usage.get(key, 0) or 0) for key in keys}
+    total = {
+        key: answerer[key] + judge[key]
+        for key in keys
+    }
+
+    return {
+        "answerer": answerer,
+        "judge": judge,
+        "total": total,
+    }
 
 
 def expected_locomo_question_items(
@@ -617,6 +641,54 @@ def locomo_predict_outputs_complete(
 # ===============================================================================
 # METRICS + DISPLAY
 # ===============================================================================
+
+
+def compute_token_usage_by_cutoff(
+    evaluations: list[dict], cutoffs: list[int],
+) -> dict:
+    """Aggregate Answerer/Judge token usage for each retrieval cutoff."""
+    keys = ("prompt_tokens", "completion_tokens", "total_tokens")
+    summary = {}
+
+    for c in cutoffs:
+        label = cutoff_label(c)
+        totals = {
+            "answerer": {key: 0 for key in keys},
+            "judge": {key: 0 for key in keys},
+            "total": {key: 0 for key in keys},
+        }
+        count = 0
+
+        for evaluation in evaluations:
+            cutoff_result = evaluation.get("cutoff_results", {}).get(label)
+            if not cutoff_result:
+                continue
+
+            usage = cutoff_result.get("token_usage")
+            if not isinstance(usage, dict):
+                continue
+
+            count += 1
+            for group in ("answerer", "judge", "total"):
+                group_usage = usage.get(group, {})
+                for key in keys:
+                    totals[group][key] += int(group_usage.get(key, 0) or 0)
+
+        averages = {
+            group: {
+                key: round(value / count, 2) if count else 0
+                for key, value in group_totals.items()
+            }
+            for group, group_totals in totals.items()
+        }
+
+        summary[label] = {
+            "questions_with_usage": count,
+            "sum": totals,
+            "average_per_question": averages,
+        }
+
+    return summary
 
 
 def compute_locomo_metrics(evaluations: list[dict], cutoffs: list[int]) -> dict:
@@ -821,6 +893,7 @@ async def async_main() -> None:
                 "evaluate_only": True,
             },
             "metrics_by_cutoff": metrics,
+            "token_usage_by_cutoff": compute_token_usage_by_cutoff(all_evaluations, cutoffs),
             "evaluations": all_evaluations,
         })
         print(f"\nResults saved to: {unified_path}")
@@ -966,6 +1039,7 @@ async def async_main() -> None:
                     "categories": categories,
                 },
                 "metrics_by_cutoff": metrics,
+                "token_usage_by_cutoff": compute_token_usage_by_cutoff(all_evaluations, cutoffs),
                 "evaluations": all_evaluations,
             })
             print(f"\nResults saved to: {unified_path}")

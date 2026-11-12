@@ -14,6 +14,7 @@ Includes retry logic and rate limiting.
 from __future__ import annotations
 
 import asyncio
+from contextvars import ContextVar
 import json
 import logging
 import os
@@ -60,6 +61,9 @@ class LLMClient:
         self.limiter = AsyncLimiter(rpm, 60)
         self.timeout = timeout
         self._client: Any = None
+        self._usage_var: ContextVar[dict[str, int] | None] = ContextVar(
+            f"llm_usage_{id(self)}", default=None
+        )
 
         if self.provider == "anthropic":
             self._init_anthropic(api_key)
@@ -103,6 +107,51 @@ class LLMClient:
             return token_matches[-1] == "yes"
 
         return text.lower().startswith("yes")
+    def reset_usage(self) -> None:
+        """Reset token usage for the current asynchronous task."""
+        self._usage_var.set({
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        })
+
+    def get_usage(self) -> dict[str, int]:
+        """Return token usage accumulated in the current asynchronous task."""
+        usage = self._usage_var.get()
+        if usage is None:
+            return {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+            }
+        return dict(usage)
+
+    def _record_usage(self, response: Any) -> None:
+        """Accumulate usage returned by OpenAI-compatible or Anthropic APIs."""
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+
+        prompt = getattr(usage, "prompt_tokens", None)
+        completion = getattr(usage, "completion_tokens", None)
+
+        if prompt is None:
+            prompt = getattr(usage, "input_tokens", 0)
+        if completion is None:
+            completion = getattr(usage, "output_tokens", 0)
+
+        prompt = int(prompt or 0)
+        completion = int(completion or 0)
+        total = getattr(usage, "total_tokens", None)
+        total = int(total) if total is not None else prompt + completion
+
+        current = self.get_usage()
+        self._usage_var.set({
+            "prompt_tokens": current["prompt_tokens"] + prompt,
+            "completion_tokens": current["completion_tokens"] + completion,
+            "total_tokens": current["total_tokens"] + total,
+        })
+
     def _init_openai(self, api_key: str | None, base_url: str | None, timeout: float, **kwargs: Any) -> None:
         import openai
         client_kwargs: dict[str, Any] = {
@@ -151,6 +200,7 @@ class LLMClient:
         Returns:
             Generated text string.
         """
+        self.reset_usage()
         if self.provider == "anthropic":
             return await self._generate_anthropic(system, user, temperature, max_tokens)
         return await self._generate_openai(system, user, temperature, max_tokens)
@@ -173,6 +223,7 @@ class LLMClient:
                         ),
                         timeout=self.timeout,
                     )
+                self._record_usage(resp)
                 content = resp.choices[0].message.content
                 if content is None:
                     logger.warning(
@@ -208,6 +259,7 @@ class LLMClient:
                         self._client.messages.create(**kwargs),
                         timeout=self.timeout,
                     )
+                self._record_usage(resp)
                 content = resp.content[0].text if resp.content else ""
                 return content.strip()
             except asyncio.TimeoutError:
@@ -245,6 +297,7 @@ class LLMClient:
         Returns:
             Parsed dict or Pydantic model instance.
         """
+        self.reset_usage()
         if self.provider == "anthropic":
             return await self._generate_structured_anthropic(system, user, response_format, temperature, max_tokens)
         return await self._generate_structured_openai(system, user, response_format, temperature, max_tokens)
@@ -275,6 +328,7 @@ class LLMClient:
                         ),
                         timeout=self.timeout,
                     )
+                self._record_usage(resp)
                 raw = resp.choices[0].message.content
                 if not raw:
                     if attempt < self.max_retries - 1:
@@ -335,6 +389,7 @@ class LLMClient:
                         self._client.messages.create(**kwargs),
                         timeout=self.timeout,
                     )
+                self._record_usage(resp)
                 raw = resp.content[0].text if resp.content else ""
                 raw = raw.strip()
 
