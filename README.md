@@ -129,6 +129,79 @@ This is a scoped reproduction rather than a complete replication of the original
 
 These differences should be considered when interpreting the results or comparing them with the original paper.
 
+
+## Reproduction Instructions
+
+The following steps describe how to run this FTEC5660 reproduction setup.
+
+### 1. Install Python dependencies
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 2. Configure environment variables
+
+```bash
+cp .env.example .env
+```
+
+Set the required DeepSeek API key in `.env`. The key is used by the Dockerized Mem0 service and the LOCOMO Answerer and Judge through the OpenAI-compatible API configuration.
+
+### 3. Configure Mem0 OSS
+
+```bash
+cp mem0-config.example.yaml mem0-config.yaml
+```
+
+The configuration uses DeepSeek Flash for LLM operations and Ollama `nomic-embed-text` for embeddings (768 dimensions).
+
+Make sure Ollama is running and the embedding model is available:
+
+```bash
+ollama pull nomic-embed-text
+```
+
+### 4. Start Mem0 OSS and Qdrant
+
+```bash
+docker compose up -d --build
+```
+
+Check the service status:
+
+```bash
+docker compose ps
+```
+
+The Mem0 API is available at `http://localhost:8888`, and Qdrant is available at `http://localhost:6333`.
+
+### 5. Run LOCOMO Conversation 0
+
+```bash
+python -m benchmarks.locomo.run \
+  --project-name ftec5660-locomo-con0 \
+  --answerer-model deepseek-flash \
+  --judge-model deepseek-flash \
+  --provider openai \
+  --judge-provider openai \
+  --conversations 0 \
+  --top-k 200 \
+  --top-k-cutoffs 5,10,20,50,100,200 \
+  --max-workers 1 \
+  --rpm 10 \
+  --backend oss
+```
+
+The runner retrieves up to Top-200 memories for each question and evaluates the same ranked retrieval results at the specified Top-K cutoffs.
+
+### 6. Inspect the results
+
+The runner saves its evaluation outputs and summary statistics under the configured results directory. The JSON output contains question-level evaluation results, while the summary provides aggregated metrics for the Top-K settings.
+
+
 <!-- FTEC5660 STUDY END -->
 
 ---

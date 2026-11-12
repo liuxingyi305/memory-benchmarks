@@ -1,0 +1,16 @@
+version: "v1.1"
+
+llm:
+  provider: openai
+  config:
+    model: deepseek-flash
+    api_key: ${OPENAI_API_KEY}
+    openai_base_url: https://api.deepseek.com
+    temperature: 0.1
+
+embedder:
+  provider: ollama
+  config:
+    model: nomic-embed-text
+    embedding_dims: 768
+    ollama_base_url: http://host.docker.internal:11434
